@@ -19,7 +19,8 @@ import (
 var (
 	fs              = flag.NewFlagSet("bench", flag.ExitOnError)
 	audioFileName   = fs.String("f", "19s.wav", "Input audio file name")
-	writeResultFile = fs.Bool("w", false, "Write results to file")
+	writeResultFile = fs.Bool("w", true, "Write results to file")
+	port            = fs.String("p", "8001", "Port number")
 )
 
 // main function
@@ -100,7 +101,7 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:    ":8001",
+		Addr:    fmt.Sprintf(":%s", *port),
 		Handler: router.Handler(),
 	}
 
@@ -118,9 +119,9 @@ func main() {
 	// kill (no param) default send syscall.SIGTERM
 	// kill -2 is syscall.SIGINT
 	// kill -9 is syscall. SIGKILL but can"t be catch, so don't need add it
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(quit, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutdown Server ...")
+	log.Println("Shutdown server. Please wait...")
 
 	// Cancel the operation
 	cancel()
