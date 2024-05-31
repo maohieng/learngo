@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/maohieng/learngo/channel/pkg"
+	"github.com/oklog/ulid"
 )
 
 var (
@@ -80,23 +82,9 @@ func main() {
 			return
 		}
 
-		// c.JSON(http.StatusOK, gin.H{
-		// 	"message":           fmt.Sprintf("Websocket requests %d are sent.", count),
-		// 	"channel_buff_size": channelBufSize,
-		// 	"time":              ended,
-		// })
-		c.Writer.Header().Set("Content-Type", "text/plain")
-		csvWriter := csv.NewWriter(c.Writer)
-		csvWriter.Write([]string{"total_req", "numb_mic_drop", "resp_time", "avg_delay", "err"})
-		defer csvWriter.Flush()
-		for _, res := range results {
-			csvWriter.Write([]string{
-				fmt.Sprintf("%d", count),
-				fmt.Sprintf("%d", res.NumbMicDrop),
-				fmt.Sprintf("%f", res.EndTime),
-				fmt.Sprintf("%f", res.AvgDelay),
-				res.Err,
-			})
+		err = writeCSV(c.Writer, count, results)
+		if err != nil {
+			log.Println("Error writing CSV", "err", err)
 		}
 	})
 
@@ -137,4 +125,61 @@ func main() {
 	<-sdCtx.Done()
 	log.Println("Server exiting")
 
+}
+
+func writeCSV(w gin.ResponseWriter, count int, data []pkg.Result) error {
+	// Create a file
+	fileid := "bench_result"
+
+	entropy := rand.New(rand.NewSource(time.Now().UnixNano()))
+	ms := ulid.Timestamp(time.Now())
+	id, err := ulid.New(ms, entropy)
+	if err == nil {
+		fileid = id.String()
+	}
+
+	filename := fmt.Sprintf("%s.csv", fileid)
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed creating file: %s", err)
+	}
+	defer file.Close()
+
+	// Create a CSV writer for the file
+	fileWriter := csv.NewWriter(file)
+
+	// Create a CSV writer for the http.ResponseWriter
+	respWriter := csv.NewWriter(w)
+
+	// Write the CSV data to both writers
+	respWriter.Write([]string{"total_req", "resp_time", "avg_delay", "err"})
+	fileWriter.Write([]string{"total_req", "resp_time", "avg_delay", "err"})
+	for _, res := range data {
+		respWriter.Write([]string{
+			fmt.Sprintf("%d", count),
+			fmt.Sprintf("%f", res.EndTime),
+			fmt.Sprintf("%f", res.AvgDelay),
+			res.Err,
+		})
+
+		fileWriter.Write([]string{
+			fmt.Sprintf("%d", count),
+			fmt.Sprintf("%f", res.EndTime),
+			fmt.Sprintf("%f", res.AvgDelay),
+			res.Err,
+		})
+	}
+
+	// Flush both writers to ensure all data is written
+	respWriter.Flush()
+	fileWriter.Flush()
+
+	if err := fileWriter.Error(); err != nil {
+		return fmt.Errorf("error with file writer: %s", err)
+	}
+	if err := respWriter.Error(); err != nil {
+		return fmt.Errorf("error with gin.ResponseWriter writer: %s", err)
+	}
+
+	return nil
 }

@@ -26,7 +26,7 @@ type Result struct {
 
 const (
 	// channelBufSize is crucial for how asynchronous speech of the user!!!!!
-	channelBufSize = 100
+	channelBufSize = 256
 	readBufSize    = 1024
 )
 
